@@ -2,6 +2,7 @@ from httpx import AsyncClient
 import re
 from os import path
 from lxml import html
+from nonebot_plugin_htmlrender import html_to_pic
 from fake_useragent import UserAgent
 from time import time
 
@@ -110,37 +111,26 @@ async def search(client: AsyncClient, name, retry_num):
 async def get_content(client: AsyncClient, book_url):
     book_info = (await client.get(url=book_url)).text
 
-    name_pattern = re.compile(r'<meta property="og:title" content="(.*?)" />')
-    author_pattern = re.compile(r'<span>(.*?)</span> 著')
-    translator_pattern = re.compile(r'</span><span>(.*?)</span> 译')
-    content_pattern = re.compile(r'<meta property="og:description" content="(.*?)" />', re.S)
-    img_pattern = re.compile(r'<img src="(.*?)" class="book-cover-blur"')
-    state_pattern = re.compile(r'<p class="book-meta">(.*?)<span class="char-pipe">\|</span>(.*?)</p>')
+    content_pattern = re.compile(r'(<div class="module module-merge">.*?)<div class="module">', re.S)
     index_pattern = re.compile(r'<li class="btn-group-cell"><a href="(.*?)"')
-    tags_etree = html.etree.HTML(book_info)
+    info_pattern = re.compile(r'<div id="bookDetailWrapper" class="module module-merge book-detail-x">.*?</span>\n</p>\n\n</div>\n</div>', re.S)
 
-    book_name = re.findall(name_pattern, book_info)[0]
-    author = re.findall(author_pattern, book_info)[0]
-    try:
-        translator = re.findall(translator_pattern, book_info)[0]
-    except IndexError:
-        translator = None
+    info = re.findall(info_pattern, book_info)[0]
     content = re.findall(content_pattern, book_info)[0]
-    states = re.findall(state_pattern, book_info)[0]
-    tags = tags_etree.xpath(r'//*[@id="bookDetailWrapper"]/div/div[1]/div/p[3]/span/em/text()')
-    tag = ""
-    for t in tags:
-        tag += f"{t} "
     index_url = "https://w.linovelib.com" + re.findall(index_pattern, book_info)[0]
-    img = re.findall(img_pattern, book_info)[0]
-    img = (await client.get(url=img)).content
 
     try:
         book_id = re.findall(r'https://w.linovelib.com/novel/(\d+).html', book_url)[0]
     except IndexError:
         book_id = re.findall(r'acode=i_(\d+)', book_url)[0]
 
-    return book_name, author, translator, states, tag, content, img, index_url, book_id
+    html_path = path.join(path.abspath(path.dirname(__file__)), "template.html")
+    with open(html_path, "r", encoding="utf-8") as h:
+        template = h.read()
+    content = template.format(content=content, info=info)
+    pic = await html_to_pic(html=content)
+
+    return pic, index_url, book_id
 
 
 async def get_bookcase(client: AsyncClient):
