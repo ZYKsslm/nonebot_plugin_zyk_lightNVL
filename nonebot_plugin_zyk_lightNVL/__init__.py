@@ -4,13 +4,16 @@ from nonebot.permission import SUPERUSER
 from nonebot.log import logger
 from nonebot import on_command
 from nonebot.exception import ActionFailed
+from nonebot import require
 from nonebot.params import Arg, T_State, CommandArg
 
 from colorama import init, Fore
 from .config import username, password, retry_num, cookie
 from .work import *
 
-__version__ = "0.1.0"
+require("nonebot_plugin_htmlrender")
+
+__version__ = "0.1.1"
 
 login_matcher = on_command(cmd="nvl_login", priority=5, permission=SUPERUSER, block=True)
 book_matcher = on_command(cmd="nvl", priority=5, permission=GROUP | PRIVATE_FRIEND, block=True)
@@ -41,7 +44,6 @@ else:
     login_state = True
     logger.info(Fore.LIGHTCYAN_EX + "使用light_nvl_cookie配置项cookie继续")
     client.headers["cookie"] = cookie
-
 
 # 字体样式初始化（自动重设字体样式）
 init(autoreset=True)
@@ -96,8 +98,9 @@ async def _(state: T_State, name: Message = CommandArg()):
         else:
             book_url = f"https://w.linovelib.com/novel/{book_id}.html"
             state["book_url"] = book_url
-            await book_matcher.send("已导入book_id，请发送任意消息继续", at_sender=True)
+            state["decorator"] = "handel"
     else:
+        state["decorator"] = "got"
         if "bookcase" in name:
             if login_state is True:
                 result = await get_bookcase(client)
@@ -123,7 +126,7 @@ async def _(state: T_State, name: Message = CommandArg()):
                 try:
                     book_info = "\n"
                     for i in range(retry_num):
-                        book_info += f"{i+1}.{book_list[i]}\n"
+                        book_info += f"{i + 1}.{book_list[i]}\n"
                     await book_matcher.send(book_info, at_sender=True)
                 except ActionFailed:
                     await book_matcher.send(f"发送失败，Bot可能被风控", at_sender=True)
@@ -132,22 +135,27 @@ async def _(state: T_State, name: Message = CommandArg()):
             await book_matcher.finish(fr'失败！', at_sender=True)
 
 
+@book_matcher.handle()
+async def _(state: T_State):
+    if state["decorator"] == "got":
+        await book_matcher.skip()
+
+    book_url = state["book_url"]
+    pic, index_url, book_id = await get_content(client, book_url)
+    await book_matcher.send(MessageSegment.image(pic))
+
+
 @book_matcher.got(key="order")
-async def _(state: T_State, order: Message = Arg("order")):
+async def _send_content(state: T_State, order: Message = Arg("order")):
+    if state['decorator'] == "handle":
+        await book_matcher.finish()
     order = str(order)
-    if "book_url" in state:
-        book_url = state["book_url"]
-    else:
-        try:
-            order = int(order)
-        except ValueError:
-            await book_matcher.finish()
-        book_url = state["url_list"][order-1]
+    try:
+        order = int(order)
+    except ValueError:
+        await book_matcher.finish()
+    book_url = state["url_list"][order - 1]
 
-    book_name, author, translator, states, tag, content, img, index_url, book_id = await get_content(client, book_url)
-    if translator is None:
-        msg = MessageSegment.image(img) + f"《{book_name}》\n{author} 著\n{states[0]} | {states[1]}\n{tag}\nbook_id:{book_id}\n{content}"
-    else:
-        msg = MessageSegment.image(img) + f"《{book_name}》\n{author} 著 | {translator} 译\n{states[0]} | {states[1]}\n{tag}\nbook_id:{book_id}\n{content}"
+    pic, index_url, book_id = await get_content(client, book_url)
 
-    await book_matcher.send(msg, at_sender=True)
+    await book_matcher.send(MessageSegment.image(pic))
