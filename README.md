@@ -24,8 +24,6 @@ nb plugin install nonebot_plugin_zyk_lightNVL
 
 ## :wrench: env配置
 
-第一次启动时账号密码和cookie二者必须有一个
-
 |        Name         |   Example   | Type |      Usage       | Required |
 |:-------------------:|:-----------:|:----:|:----------------:|:--------:|
 | light_nvl_username  |     cxk     | str  |   哔哩轻小说账户的用户名    |    No    |
@@ -34,7 +32,7 @@ nb plugin install nonebot_plugin_zyk_lightNVL
 | light_nvl_retry_num |     50      | int  | 搜索结果发送失败时重新发送的条数 |    No    |
 
 ### 登录说明
-未登录状态下能使用的功能可能受限，推荐先去[网站](https://w.linovelib.com/register.php)注册一个账号再搭配本插件食用。
+[账号注册](https://w.linovelib.com/register.php)
 
 每次启动时会优先使用env中配置的cookie，如果没有则使用自动保存的cookie登录，如果也没有则以未登录状态继续。
 
@@ -71,11 +69,17 @@ eg:
 - 可选参数 *(info)* 、*bookcase*、*id (book_id)* 中**请确保有一个参数存在**。
 
 1. *(info)* 用于查找轻小说，可以是书名、作者、或类型等。
-
+    ```
+   /nvl 回复术士
+   ```
 2. *bookcase* 用于查看当前账号的书架，只有登录状态才可以使用。
-
-3. *id (book_id)* 用于导入book_id（可以在书的网址中查看，如 `https://w.linovelib.com/novel/3518.html` 中的 `3518`）
-
+    ```
+   /nvl bookcase
+   ```
+3. *id (book_id)* 用于导入book_id（可以查看书页，如 `https://w.linovelib.com/novel/3518.html` 中的 `3518`）
+    ```
+   /nvl id 3518
+   ```
 ---
 
 :bug: 如果发现插件有BUG或有建议，欢迎**合理**提*Issue*
