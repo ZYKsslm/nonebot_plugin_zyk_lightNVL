@@ -4,20 +4,22 @@
 
 *本插件基于轻小说网站[哔哩轻小说](https://w.linovelib.com)制作*
 
->说明
+## 更新0.2.0
 
-本插件目前只是半成品，先厚脸皮来占个坑。
-
-目前只支持查询的功能，后面会支持下载。
-
-为什么不做完再发？因为~~懒~~没时间在短期内完成。
+1. 解决网站cookies问题
+2. 取消依赖nonebot_plugin_htmlrender，适配windows7
+3. 优化交互方式，可连续交互
 
 ## :cd: 安装方式
+
 - #### 使用pip
+
 ```
 pip install nonebot_plugin_zyk_lightNVL
 ```
+
 - #### 使用nb-cli
+
 ```
 nb plugin install nonebot_plugin_zyk_lightNVL
 ```
@@ -28,58 +30,67 @@ nb plugin install nonebot_plugin_zyk_lightNVL
 |:-------------------:|:-----------:|:----:|:----------------:|:--------:|
 | light_nvl_username  |     cxk     | str  |   哔哩轻小说账户的用户名    |    No    |
 | light_nvl_password  |   123456    | str  |    哔哩轻小说账户的密码    |    No    |
-|  light_nvl_cookie   | your:cookie | str  |   已经登录的cookie    |    No    |
+|  light_nvl_show_all   | False | bool  |   是否显示所有搜索结果，建议为False    |    No    |
 | light_nvl_retry_num |     50      | int  | 搜索结果发送失败时重新发送的条数 |    No    |
 
 ### 登录说明
+
 [账号注册](https://w.linovelib.com/register.php)
 
-每次启动时会优先使用env中配置的cookie，如果没有则使用自动保存的cookie登录，如果也没有则以未登录状态继续。
-
-第一次启动则没有自动保存的cookie，需要使用指令来手动登录。
-
-每次手动登录成功后将会自动保存cookie。
-
-如果已经在浏览器中登录过了，可以直接复制cookie到env配置项中。
-
-在有cookie的情况下，无法手动登录。可以使用手动登录指令的*enforce*参数来强制手动登录，一般用于切换账号或cookie异常的情况。
-
+启动前请先在浏览器中访问[搜索页面](https://w.linovelib.com/search.html)以确保能够自动获取cookies
 
 ## :label: 指令
-### 手动登录
+
+### 登录
+
 ```
-(COMMAND_START)nvl_login [enforce]
+(COMMAND_START)nvl_login
 
 eg:
     /nvl_login
 ```
-- 可选参数*enforce*用于强制手动登录
+
+### 刷新cookies
 ```
-/nvl_login enforce
+(COMMAND_START)nvl_cookies
+
+eg:
+    /nvl_cookies
 ```
 
-### 操作
+用于cookies过期的情况，可能会失效。如果失效请重启bot以刷新
+
+### 查找轻小说
+
+#### 使用关键字查找
+
 ```
-(COMMAND_START)nvl [(info)|bookcase|id (book_id)]
+(COMMAND_START)nvl (key words)
 
 eg:
     /nvl 回复术士
 ```
 
-- 可选参数 *(info)* 、*bookcase*、*id (book_id)* 中**请确保有一个参数存在**。
+#### 使用书页id精确查找
 
-1. *(info)* 用于查找轻小说，可以是书名、作者、或类型等。
-    ```
-   /nvl 回复术士
-   ```
-2. *bookcase* 用于查看当前账号的书架，只有登录状态才可以使用。
-    ```
-   /nvl bookcase
-   ```
-3. *id (book_id)* 用于导入book_id（可以查看书页，如 `https://w.linovelib.com/novel/3518.html` 中的 `3518`）
-    ```
-   /nvl id 3518
-   ```
+```
+(COMMAND_START)nvl_id (id)
+
+eg:
+    /nvl_id 3636
+```
+
+#### 个人书架
+
+```
+(COMMAND_START)nvl_bookcase
+
+eg:
+    /nvl_bookcase
+```
+
+只有登录后才可使用
+
 ---
 
 :bug: 如果发现插件有BUG或有建议，欢迎**合理**提*Issue*
