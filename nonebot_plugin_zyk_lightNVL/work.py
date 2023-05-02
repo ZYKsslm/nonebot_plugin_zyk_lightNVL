@@ -2,7 +2,69 @@ from httpx import AsyncClient
 import re
 from fake_useragent import UserAgent
 from time import time
+from asyncio import sleep
+import atexit
 from .config import *
+
+
+
+def html_parse(episodes=None, index_dict=None, chapter=None):
+
+    html_text = f'''<!DOCTYPE html>
+    <html lang="zh-Hans">
+    <head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="https://w.linovelib.com/themes/zhmb/css/info.css?v0509c1">
+    </head>
+    <body>
+    <div id="content">
+    <ol id="volumes" class="chapter-ol chapter-ol-catalog">
+    '''
+    if index_dict is not None:
+        for chapter, episodes in index_dict.items():
+            html_text += f'''
+            <li class="chapter-bar chapter-li">{chapter}</li>
+            '''
+            for episode in episodes:
+                html_text += f'''<li class="chapter-li jsChapter"><a class="chapter-li-a "><span class="chapter-index ">{episode}</span></a></li>
+                '''
+    else:
+        html_text += f'''
+        <li class="chapter-bar chapter-li">{chapter}</li>
+        '''
+        for episode in episodes:
+                html_text += f'''<li class="chapter-li jsChapter"><a class="chapter-li-a "><span class="chapter-index ">{episode}</span></a></li>
+                '''
+
+    html_text += '''
+    </ol>
+    </div>
+    </body>
+    </html>
+    '''
+
+    html_path = path.join(path.abspath(path.dirname(__file__)), "index.html")
+    with open(html_path, "w+", encoding="utf-8") as f:
+        f.write(html_text)
+
+    return html_path
+
+
+async def index_parse(index_info):
+
+    chapter_info = re.findall(r'([\u4e00-\u9fa5\s\dA-Za-z（）]+)(</li>.*?<li class="chapter-li jsChapter"><a.*?)(<li class="chapter-bar chapter-li">|</ol>.*?</div>)', index_info, re.S)
+    
+    index_dict = {}
+    for res in chapter_info:
+        chapter, episode_info = res[0], res[1]
+        episodes = re.findall(r'<span class="chapter-index ">(.*?)</span></a>', episode_info)
+        index_dict.update(
+            {
+                chapter: episodes
+            }
+        )
+    
+    return index_dict
 
 
 async def get_checkcode():
@@ -63,11 +125,12 @@ async def search(client: AsyncClient, name, retry_num):
 
     # 重定向（直接跳转到书页）
     if "/novel/" in str(resp.url):
-        return "book_page", info
+        return "book_page", info, str(resp.url)
 
     # 没有重定向且有多个结果
     elif '<meta name="robots" content="noindex,nofollow">' not in info:
         book_list, href_list, next_page = search_parse(info)
+        
         if (next_page is None) or (show_all is False):
             return book_list, href_list
 
@@ -82,6 +145,7 @@ async def search(client: AsyncClient, name, retry_num):
         for _ in range(page - 1):
             if next_page == "#":
                 break
+            await sleep(3)
             info = (await client.get(url=next_page)).text
             # 获取书名信息列表
             books = re.findall(r'class="book-cover" alt="(.*?)">', info)
@@ -115,6 +179,21 @@ def search_parse(res):
         return book_list, href_list, "https://w.linovelib.com" + next_page
 
 
+def browser_size_reset():
+    # 使用execute_script方法获取网页的宽度和高度
+    width = driver.execute_script("return document.body.clientWidth")
+    height = driver.execute_script("return document.body.clientHeight")
+
+    # 使用set_window_size方法调整浏览器窗口的大小
+    driver.set_window_size(width,height)
+
+
+# 防止程序强制退出，关闭浏览器
+@atexit.register
+def quit():
+    driver.quit()
+
+
 async def get_content(book_info):
 
     content_pattern = re.compile(r'(<!DOCTYPE html>.*)<style>.page-fans', re.S)
@@ -126,7 +205,11 @@ async def get_content(book_info):
         h.write(content)
 
     driver.get(f'file:///{html_path}')
-    driver.implicitly_wait(1)
+    driver.implicitly_wait(2)
+    
+    if browser != "phantomjs":
+        browser_size_reset()
+
     pic = driver.get_screenshot_as_png()
 
     return pic
