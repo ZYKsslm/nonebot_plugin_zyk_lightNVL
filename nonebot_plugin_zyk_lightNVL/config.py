@@ -5,19 +5,8 @@ from selenium import webdriver
 from os import path
 
 
-class NoCookies(Exception):
-    def __str__(self):
-        return "未获取到cookies，请在浏览器中访问https://w.linovelib.com/search.html并重启bot！"
-
-# 获取cookies
-def reset_cookies():
-    cookies = load(domain_name="w.linovelib.com")
-    if not cookies:
-        raise NoCookies
-    return cookies
-
-cookies = reset_cookies()
-
+# 获取浏览器缓存cookies
+cookies = load(domain_name="w.linovelib.com")
 
 # 获取用户名
 try:
@@ -43,5 +32,28 @@ try:
 except AttributeError:
     show_all = False
 
+# 获取浏览器
+try:
+    browser = get_driver().config.light_nvl_browser
+except AttributeError:
+    browser = "phantomjs"
+if browser != "Chrome" or browser != "chrome":
+    browser = "phantomjs"
 
-driver = webdriver.PhantomJS(executable_path=path.join(path.abspath(path.dirname(__file__)), "phantomjs/bin/phantomjs.exe"))
+# 获取chromedriver_path的路径
+try:
+    chromedriver_path = get_driver().config.light_nvl_chromedriver_path
+except AttributeError:
+    chromedriver_path = None
+
+
+if browser == "Chrome" or browser == "chrome":
+    from selenium.webdriver.chrome.options import Options
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    # 创建一个webdriver.Chrome对象，并传入chrome_options和executable_path参数
+    driver = webdriver.Chrome(chrome_options=chrome_options, executable_path=chromedriver_path)
+    
+else:
+    driver = webdriver.PhantomJS(executable_path=path.join(path.abspath(path.dirname(__file__)), "phantomjs/bin/phantomjs.exe"))
