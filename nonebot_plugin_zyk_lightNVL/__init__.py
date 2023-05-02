@@ -3,13 +3,14 @@ from nonebot.adapters.onebot.v11 import GROUP, PRIVATE_FRIEND, Message, MessageS
 from nonebot.permission import SUPERUSER
 from nonebot.log import logger
 from nonebot import on_command
+from nonebot.matcher import Matcher
 from nonebot.exception import ActionFailed
 from nonebot.params import Arg, T_State, CommandArg
 
 from colorama import init, Fore
 from .work import *
 
-__version__ = "0.2"
+__version__ = "0.3.0"
 
 login_matcher = on_command(cmd="nvl_login", priority=5, permission=SUPERUSER)
 id_matcher = on_command(cmd="nvl_id", priority=5, permission=GROUP | PRIVATE_FRIEND, block=True)
@@ -64,17 +65,20 @@ async def _(state: T_State, checkcode: Message = Arg("checkcode")):
     await login_matcher.finish(f"登录成功，{nickname}")
 
 
-#重新获取cookies
+# 获取cookies
 @cookies_matcher.handle()
 async def _():
-    cookies = reset_cookies()
-    client.cookies = cookies
+    driver.get(r"https://w.linovelib.com/search.html")
+    await sleep(2)
+    cookies = driver.get_cookies()
+    for cookie in cookies:
+        client.cookies.set(cookie["name"], cookie["value"])
     await cookies_matcher.finish("成功获取cookies！")
 
 
 # 使用id
 @id_matcher.handle()
-async def _(nid: Message = CommandArg()):
+async def _(state: T_State, nid: Message = CommandArg()):
     try:
         nid = int(str(nid))
     except ValueError:
@@ -82,53 +86,51 @@ async def _(nid: Message = CommandArg()):
     else:
         await book_matcher.send("请稍后......", at_sender=True)
 
-    book_info = (await client.get(url=f"https://w.linovelib.com/novel/{nid}.html")).text
+    book_url = f"https://w.linovelib.com/novel/{nid}.html"
+    book_info = (await client.get(url=book_url)).text
+    state["book_url"] = book_url
     pic = await get_content(book_info)
     await book_matcher.send(MessageSegment.image(pic), at_sender=True)
+
+
+@id_matcher.got("prompt")
+async def _(state: T_State, pmt: Message = Arg("prompt")):
+    pmt = str(pmt)
+    if pmt != "index" and pmt != "index_tree":
+        await id_matcher.finish("选择取消", at_sender=True)
+    else:
+        state["mode"] == pmt
+        await id_matcher.skip()
 
 
 # 使用书名
 @book_matcher.handle()
 async def _(state: T_State, name: Message = CommandArg()):
-    await id_matcher.send("正在搜索中，请耐心等待......")
+    await id_matcher.send("正在搜索中，请耐心等待......", at_sender=True)
 
     res = await search(client=client, name=name, retry_num=retry_num)
 
     if res:
         if res[0] == "book_page":
             book_info = res[1]
+            book_url = res[2]
             pic = await get_content(book_info)
-            await book_matcher.finish(MessageSegment.image(pic), at_sender=True)
+            state["book_url"] = book_url
+            await book_matcher.send(MessageSegment.image(pic), at_sender=True)
         else:
             book_list, url_list = res
             state["url_list"] = url_list
+            state["book_list"] = book_list
             book_info = "\n".join([f"{num+1}.{book}" for num, book in enumerate(book_list)])
 
             try:
                 await book_matcher.send(book_info, at_sender=True)
             except ActionFailed:
-                await book_matcher.send(f"发送失败！", at_sender=True)
+                await book_matcher.finish(f"发送失败！", at_sender=True)
+
     else:
-        logger.warning(Fore.LIGHTYELLOW_EX + "搜索失败，请尝试在浏览器中访问https://w.linovelib.com/search.html后使用nvl_cookies指令或重启bot")
+        logger.warning(Fore.LIGHTYELLOW_EX + "搜索失败，请使用nvl_cookies指令自动获取cookies")
         await book_matcher.finish("搜索失败！", at_sender=True)
-
-
-@book_matcher.got(key="order")
-async def _(state: T_State, order: Message = Arg("order")):
-    order = str(order)
-    try:
-        order = int(order)
-    except ValueError:
-        await book_matcher.finish("选择取消", at_sender=True)
-
-    book_url = state["url_list"][order - 1]
-    await book_matcher.send("请稍后......", at_sender=True)
-
-    book_info = (await client.get(url=book_url)).text
-    pic = await get_content(book_info)
-
-    await book_matcher.send(MessageSegment.image(pic))
-    await book_matcher.reject()
 
 
 @bookcase_matcher.handle()
@@ -138,6 +140,7 @@ async def _(state: T_State):
     if result is not False:
         book_list, url_list = result
         state["url_list"] = url_list
+        state["book_list"] = book_list
         book_info = "\n".join([f"{num+1}.{book}" for num, book in enumerate(book_list)])
 
         try:
@@ -155,19 +158,94 @@ async def _(state: T_State):
         await book_matcher.finish('当前为未登录状态，获取书架失败！', at_sender=True)
 
 
-@bookcase_matcher.got(key="order")
-async def _(state: T_State, order: Message = Arg("order")):
-    order = str(order)
+# 使用序号查询
+@book_matcher.got(key="cmd")
+@bookcase_matcher.got(key="cmd")
+async def _(matcher: Matcher, state: T_State, cmd: Message = Arg("cmd")):
+    cmd = str(cmd)
     try:
-        order = int(order)
+        cmd = int(cmd)
     except ValueError:
-        await book_matcher.finish("选择取消", at_sender=True)
+        if cmd != "index" and cmd != "index_tree":
+            await matcher.finish("选择取消", at_sender=True)
+        else:
+            try:
+                state["book_url"] = state["url_list"][state["order"]]
+            except KeyError:
+                pass
+            del state["url_list"]
+            state["mode"] = cmd
+            await matcher.skip()
 
-    book_url = state["url_list"][order - 1]
-    await book_matcher.send("请稍后......", at_sender=True)
+    state["order"] = cmd - 1
+    book_url = state["url_list"][cmd - 1]
+    await matcher.send("请稍后......", at_sender=True)
 
     book_info = (await client.get(url=book_url)).text
     pic = await get_content(book_info)
 
-    await book_matcher.send(MessageSegment.image(pic))
-    await book_matcher.reject()
+    await matcher.reject(MessageSegment.image(pic), at_sender=True)
+
+
+# 发送目录
+@id_matcher.handle()
+@book_matcher.handle()
+@bookcase_matcher.handle()
+async def _(matcher: Matcher, state: T_State):
+    book_url = state["book_url"]
+    try:
+        aid = re.findall(r'aid=(\d+)', book_url)[0]
+    except IndexError:
+        aid = re.findall(r'/novel/(\d+)\.', book_url)[0]
+
+    index_url = f"https://w.linovelib.com/novel/{aid}/catalog"
+    index_info = (await client.get(index_url)).text
+    index_dict = await index_parse(index_info)
+
+    state["index_dict"] = index_dict
+
+    if state["mode"] == "index":
+        chapters = "\n".join(index_dict.keys())
+        await matcher.send(chapters, at_sender=True)
+    
+    await matcher.skip()
+
+
+@id_matcher.handle()
+@book_matcher.handle()
+@bookcase_matcher.handle()
+async def _(state: T_State, matcher: Matcher):
+    if state["mode"] == "index":
+        matcher.skip()
+
+    elif state["mode"] == "index_tree":
+        index_dict = state["index_dict"]
+        html_path = html_parse(index_dict=index_dict)
+        
+        driver.get(f'file:///{html_path}')
+        if browser != "phantomjs":
+            browser_size_reset()
+        pic = driver.get_screenshot_as_png()
+
+        await matcher.finish(MessageSegment.image(pic), at_sender=True)
+
+
+@id_matcher.got("chapter")
+@book_matcher.got("chapter")
+@bookcase_matcher.got("chapter")
+async def _(matcher: Matcher, state: T_State, chapter: Message = Arg("chapter")):
+    chapter = str(chapter)
+    index_dict = state["index_dict"]
+    try:
+        episodes = index_dict[chapter] 
+    except KeyError:
+        await matcher.finish("选择取消", at_sender=True)
+
+    html_path = html_parse(chapter=chapter, episodes=episodes)
+
+    driver.get(f'file:///{html_path}')
+    if browser != "phantomjs":
+        browser_size_reset()
+    pic = driver.get_screenshot_as_png()
+
+    await matcher.reject(MessageSegment.image(pic), at_sender=True)
