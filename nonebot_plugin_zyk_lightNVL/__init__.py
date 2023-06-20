@@ -10,14 +10,13 @@ from nonebot.params import Arg, T_State, CommandArg
 from colorama import init, Fore
 from .work import *
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 login_matcher = on_command(cmd="nvl_login", priority=5, permission=SUPERUSER)
 id_matcher = on_command(cmd="nvl_id", priority=5, permission=GROUP | PRIVATE_FRIEND, block=True)
 bookcase_matcher = on_command(cmd="nvl_bookcase", priority=5, permission=GROUP | PRIVATE_FRIEND, block=True)
 book_matcher = on_command(cmd="nvl", priority=5, permission=GROUP | PRIVATE_FRIEND, block=True)
 cookies_matcher = on_command(cmd="nvl_cookies", priority=5, permission=SUPERUSER, block=True)
-
 
 # 字体样式初始化（自动重设字体样式）
 init(autoreset=True)
@@ -35,6 +34,7 @@ client = AsyncClient(
 
 logger.success(Fore.LIGHTGREEN_EX + f"成功导入本插件，插件版本为{__version__}")
 
+
 # 登录
 @login_matcher.handle()
 async def _(state: T_State):
@@ -44,6 +44,7 @@ async def _(state: T_State):
         await login_matcher.send("请尽快输入验证码，以免失效" + MessageSegment.image(img))
     else:
         await login_matcher.finish("缺少账号或密码！")
+
 
 # 获取验证码
 @login_matcher.got(key="checkcode")
@@ -99,7 +100,7 @@ async def _(state: T_State, pmt: Message = Arg("prompt")):
     if pmt != "index" and pmt != "index_tree":
         await id_matcher.finish("选择取消", at_sender=True)
     else:
-        state["mode"] == pmt
+        state["mode"] = pmt
         await id_matcher.skip()
 
 
@@ -121,7 +122,7 @@ async def _(state: T_State, name: Message = CommandArg()):
             book_list, url_list = res
             state["url_list"] = url_list
             state["book_list"] = book_list
-            book_info = "\n".join([f"{num+1}.{book}" for num, book in enumerate(book_list)])
+            book_info = "\n".join([f"{num + 1}.{book}" for num, book in enumerate(book_list)])
 
             try:
                 await book_matcher.send(book_info, at_sender=True)
@@ -141,7 +142,7 @@ async def _(state: T_State):
         book_list, url_list = result
         state["url_list"] = url_list
         state["book_list"] = book_list
-        book_info = "\n".join([f"{num+1}.{book}" for num, book in enumerate(book_list)])
+        book_info = "\n".join([f"{num + 1}.{book}" for num, book in enumerate(book_list)])
 
         try:
             await book_matcher.send(book_info, at_sender=True)
@@ -207,7 +208,7 @@ async def _(matcher: Matcher, state: T_State):
     if state["mode"] == "index":
         chapters = "\n".join(index_dict.keys())
         await matcher.send(chapters, at_sender=True)
-    
+
     await matcher.skip()
 
 
@@ -221,7 +222,7 @@ async def _(state: T_State, matcher: Matcher):
     elif state["mode"] == "index_tree":
         index_dict = state["index_dict"]
         html_path = html_parse(index_dict=index_dict)
-        
+
         driver.get(f'file:///{html_path}')
         if browser != "phantomjs":
             browser_size_reset()
@@ -237,7 +238,7 @@ async def _(matcher: Matcher, state: T_State, chapter: Message = Arg("chapter"))
     chapter = str(chapter)
     index_dict = state["index_dict"]
     try:
-        episodes = index_dict[chapter] 
+        episodes = index_dict[chapter]
     except KeyError:
         await matcher.finish("选择取消", at_sender=True)
 
